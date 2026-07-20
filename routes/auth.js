@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { sendOTPEmail } = require('../config/emailService');
+const { protect } = require('../middleware/auth');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -164,9 +165,11 @@ router.post('/forgot-password', async (req, res) => {
     const emailResult = await sendOTPEmail(email, otp, user.name);
 
     if (!emailResult.success) {
+      console.error('Email error details:', emailResult.error);
       return res.status(500).json({
         success: false,
         message: 'Failed to send email. Please try again.',
+        error: emailResult.error,
       });
     }
 
@@ -304,6 +307,103 @@ router.post('/reset-password', async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+});
+
+// ===========================
+// GET /api/auth/profile
+// Get user profile
+// ===========================
+router.get('/profile', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ===========================
+// PUT /api/auth/profile
+// Update user profile
+// ===========================
+router.put('/profile', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const { name, phone, businessName, avatar, bankDetails } = req.body;
+
+    if (name) user.name = name;
+    if (phone !== undefined) user.phone = phone;
+    if (businessName) user.businessName = businessName;
+    if (avatar) user.avatar = avatar;
+    if (bankDetails) user.bankDetails = { ...user.bankDetails, ...bankDetails };
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully!',
+      data: user,
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ===========================
+// PUT /api/auth/change-password
+// Change password (when logged in)
+// ===========================
+router.put('/change-password', protect, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Both passwords required',
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters',
+      });
+    }
+
+    const user = await User.findById(req.user.id).select('+password');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const isMatch = await user.matchPassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect',
+      });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully!',
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
