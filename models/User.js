@@ -49,18 +49,17 @@ const UserSchema = new mongoose.Schema(
       gender: { type: String, enum: ['male', 'female'], default: 'male' },
       emoji: { type: String, default: '👨‍💼' },
     },
-    
-    // Timestamps
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
-    },
+
+    // Password Reset
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
+    resetOTP: String,
+    resetOTPExpires: Date,
   },
-  { timestamps: true }
+  { 
+    // This second argument automatically creates and manages createdAt and updatedAt fields
+    timestamps: true 
+  }
 );
 
 // Hash password before saving
